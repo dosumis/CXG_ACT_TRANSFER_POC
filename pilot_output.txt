@@ -1,0 +1,106 @@
+
+============================================================
+Loading data for 2 dataset(s)...
+
+--- Dataset version 75c059c8-8fb7-4e6e-a618-a3e01ac42060 ---
+  Census dataset_id: d8da613f-e681-4c69-b463-e94f5e66847f
+  Using cached d8da613f-e681-4c69-b463-e94f5e66847f.h5ad
+  Querying Census obs for d8da613f-e681-4c69-b463-e94f5e66847f ...
+  Found 116313 cells in Census (homo_sapiens)
+
+--- Dataset version 891c6eef-a243-41a7-8b47-c8c1a224a193 ---
+  Census dataset_id: 9dbab10c-118d-496b-966a-67f1763a6b7d
+  Using cached 9dbab10c-118d-496b-966a-67f1763a6b7d.h5ad
+  Querying Census obs for 9dbab10c-118d-496b-966a-67f1763a6b7d ...
+  Found 1462702 cells in Census (homo_sapiens)
+
+============================================================
+Building bitmaps...
+
+Cluster: 'Monocyte-derived macrophages'  (dataset 75c059c8-8fb7-4e6e-a618-a3e01ac42060)
+  obs_column resolved via obs_meta fallback: 'cell_type_fine'
+  obs_column   : cell_type_fine
+  H5AD cells   : 9534
+  Matched      : 9534
+  Join rate    : 100.0%
+  Bitmap size  : 9534 cells, 16810 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1038/s41586-021-03569-1
+
+Cluster: 'Macro_c2-CCL3L1'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 6727
+  Matched      : 6727
+  Join rate    : 100.0%
+  Bitmap size  : 6727 cells, 9816 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro_c1-C1QC'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 11221
+  Matched      : 11221
+  Join rate    : 100.0%
+  Bitmap size  : 11221 cells, 10088 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro_c4-DNAJB1'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 1282
+  Matched      : 1282
+  Join rate    : 100.0%
+  Bitmap size  : 1282 cells, 2636 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro_c6-VCAN'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 540
+  Matched      : 540
+  Join rate    : 100.0%
+  Bitmap size  : 540 cells, 1120 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : majorType
+  H5AD cells   : 21471
+  Matched      : 21471
+  Join rate    : 100.0%
+  Bitmap size  : 21471 cells, 14654 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro_c3-EREG'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 1030
+  Matched      : 1030
+  Join rate    : 100.0%
+  Bitmap size  : 1030 cells, 2100 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+Cluster: 'Macro_c5-WDR74'  (dataset 891c6eef-a243-41a7-8b47-c8c1a224a193)
+  obs_column   : celltype
+  H5AD cells   : 671
+  Matched      : 671
+  Join rate    : 100.0%
+  Bitmap size  : 671 cells, 1470 bytes serialised
+  IRI          : None
+  DOI          : https://doi.org/10.1016/j.cell.2021.01.053
+
+============================================================
+Summary: 8/8 clusters built successfully
+
+                       label  iri     obs_column                           dataset_id                                        doi  h5ad_cells  matched_cells  join_rate
+Monocyte-derived macrophages None cell_type_fine 75c059c8-8fb7-4e6e-a618-a3e01ac42060 https://doi.org/10.1038/s41586-021-03569-1        9534           9534        1.0
+             Macro_c2-CCL3L1 None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053        6727           6727        1.0
+               Macro_c1-C1QC None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053       11221          11221        1.0
+             Macro_c4-DNAJB1 None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053        1282           1282        1.0
+               Macro_c6-VCAN None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053         540            540        1.0
+                       Macro None      majorType 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053       21471          21471        1.0
+               Macro_c3-EREG None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053        1030           1030        1.0
+              Macro_c5-WDR74 None       celltype 891c6eef-a243-41a7-8b47-c8c1a224a193 https://doi.org/10.1016/j.cell.2021.01.053         671            671        1.0
+
+Union bitmap (all 8 clusters): 31005 unique cells
