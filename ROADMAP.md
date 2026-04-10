@@ -77,7 +77,15 @@ The no-extra-key case requires trying each `obs_meta` field name until one match
 ## Proposed schema extension
 
 ```cypher
-(Cell_cluster {label, iri, obs_column: str, observation_joinids: [str]})
+(Cell_cluster {
+  label,                           // existing — curated/winning display label
+  iri,                             // existing
+  author_label_column: str,        // NEW — obs column name that sourced the winning label
+  author_synonym_columns: [str],   // NEW — other obs column names with identical cell sets
+                                   //       labels recoverable from existing node properties
+                                   //       keyed by those column names
+  // author obs column values already stored as ad-hoc properties e.g. celltype: "Macro_c2-CCL3L1"
+})
   -[:composed_primarily_of]-> (Cell {curie, label})
   -[:subcluster_of*0..]-> (Cell_cluster)
   -[:tissue]-> (Class {label})
@@ -88,12 +96,23 @@ The no-extra-key case requires trying each `obs_meta` field name until one match
 
 | New property | Node | Notes |
 |---|---|---|
-| `obs_column` | `Cell_cluster` | Explicit obs column name used to source this cluster's label — resolves the curated-merge ambiguity |
-| `observation_joinids` | `Cell_cluster` | Array of stable cross-build IDs from source H5AD obs |
+| `author_label_column` | `Cell_cluster` | Obs column name that sourced the winning/curated label. Fixes the merged-node gap where no column key is currently stored. Used by bitmap build job to filter H5AD obs. |
+| `author_synonym_columns` | `Cell_cluster` | List of other obs column names whose cell sets were identical and merged into this node. Labels recoverable from existing ad-hoc column-keyed properties on the node. Neo4j stores as `[str]` — nested maps not supported as property values. |
 | `census_dataset_id` | `Dataset` | Resolved Census `dataset_id` (differs from `dataset_version_id` in `download_link`) |
 | `census_version_cached` | `Dataset` | Census build against which current bitmaps were generated |
 
-Bitmap store keyed by `(node_iri, census_version)` — no separate UUID needed.
+**Note on `observation_joinid`:** this is an H5AD/Census concept only — it never touches the KG. It is used transiently during the bitmap build job as the join key between H5AD obs and Census obs, then discarded. The KG only needs `author_label_column` to know how to extract the right cells from an H5AD.
+
+**Bitmap store:** keyed by `(node_iri, census_version)` — no separate UUID needed.
+
+### Reconstructing the full author annotation picture from KG alone
+
+Given a `Cell_cluster` node:
+1. `label` — the curated display label
+2. `author_label_column` → look up `node[author_label_column]` → original author label string (if stored)
+3. `author_synonym_columns` → for each column name, look up `node[column_name]` → synonym author labels
+
+This gives the complete set of author annotation strings across all merged obs columns, recoverable without touching the H5AD.
 
 ---
 
