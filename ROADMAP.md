@@ -250,83 +250,85 @@ Note: only 2 genes returned (MARCO, C1QC) — CCL3L1 not measured in either data
 
 ---
 
-### Phase 3 — Graph write-back (requires Sanger network access)
-- [ ] Write `obs_column` and `observation_joinids` to `Cell_cluster` nodes
-- [ ] Write `census_dataset_id` and `census_version_cached` to `Dataset` nodes
-- [ ] Schema improvement: ensure `obs_column` is stored for all nodes, including curated-merge cases
+---
+
+## Implementation plan — Pandasaurus_cxG tickets
+
+The PoC (Phases 0–2b above) is complete and validates the end-to-end workflow. The next stage is integrating this into the Pandasaurus_cxG build pipeline. Three tickets, in dependency order.
 
 ---
 
----
+### Ticket 1 — Schema: add `author_label_column`, `author_synonym_columns`, `census_dataset_id`
 
-## Implementation plan — pipeline integration
+**Goal:** Update the `Cell_cluster` and `Dataset` node schemas so each node explicitly records which obs column sourced its label, which other columns were merged, and the resolved Census dataset identifier.
 
-The PoC (Phases 0–2b above) is complete and validates the end-to-end workflow. The next stage is integrating this into the production CL-KG build pipeline. This requires two tickets and a decision on server architecture.
+**Changes to `Cell_cluster` nodes:**
+- `author_label_column: str` — the obs column name that sourced this node's winning label (e.g. `"cell_type_fine"`)
+- `author_synonym_columns: [str]` — other obs column names whose identical cell sets were merged into this node. Labels recoverable from existing ad-hoc properties keyed by those column names.
 
----
+**Changes to `Dataset` nodes:**
+- `census_dataset_id: str` — resolved Census `dataset_id` (differs from `dataset_version_id` in `download_link`; resolution via version_id or DOI match, both confirmed working in PoC)
+- `census_version_cached: str` — Census build against which bitmaps were last generated
 
-### Ticket A — Store obs_column + observation_joinids on Cell_cluster nodes
+**Where:** `GraphGenerator.generate_rdf_graph` in Pandasaurus_cxG — the method already iterates `(field_name, value)` pairs per `Cell_cluster`. `author_label_column` is just the `field_name` that won curation. `author_synonym_columns` requires detecting identical cell sets during the merge step (`AnndataAnalyzer`) and recording which fields produced them.
 
-**Goal:** During KB build, record the observation_joinid set and source obs column for each Cell_cluster node, so the bitmap cache job (Ticket B) can run without re-downloading H5ADs.
-
-**What changes:**
-- At graph build time, for each `(field_name, label)` pair that becomes a `Cell_cluster` node:
-  - Filter `obs[field_name] == label` → extract `obs["observation_joinid"]` for matching rows
-  - Write `obs_column = field_name` and `observation_joinids = [...]` to the node
-- On the `Dataset` node: resolve and store `census_dataset_id` (from `download_link` UUID or DOI match — both work, as confirmed by pilot)
-
-**Where this lives:**
-The natural place is inside `pandasaurus_cxg`'s graph generation step (`AnndataAnalyzer._generate_co_annotation_dataframe` already processes obs by field_name/value pairs; `GraphGenerator.generate_rdf_graph` already has the H5AD open). However, integrating this into pandasaurus_cxg is a separate, non-trivial change to that library.
-
-**Short-term approach (punt pandasaurus_cxg integration):** Run as a post-build enrichment script against the existing graph + source H5ADs. Script takes a dataset_id, downloads the H5AD, queries the graph for matching Cell_cluster nodes, and writes `obs_column` + `observation_joinids` back via Bolt. This is essentially a generalisation of `pilot_bitmap_build.py`.
-
-**Long-term:** Integrate into pandasaurus_cxg so the extraction happens at build time and no second H5AD pass is needed.
-
-**Pre-requisites:** Bolt write access to `cl-kg-neo4j-db` (Sanger network / VPN).
+**Pre-requisites:** None — this is a schema-only change with no external dependencies.
 
 ---
 
-### Ticket B — Build and cache soma_joinid bitmaps
+### Ticket 2 — Bitmap build integrated into graph build pipeline
 
-**Goal:** For each `Cell_cluster` node with `observation_joinids` (set by Ticket A), resolve `soma_joinid` bitmaps against a given Census build and cache them for fast query-time access.
+**Goal:** At graph build time, while the H5AD is still open, build `soma_joinid` roaring bitmaps for each `Cell_cluster` node.
+
+**What it does:** For each `Cell_cluster` node during build:
+1. Filter `obs[author_label_column] == label` → extract `observation_joinid` set (H5AD already open)
+2. Join to Census obs for the dataset's `census_dataset_id` → resolve `soma_joinid` array
+3. Encode as roaring bitmap, persist keyed by `(node_iri, census_version)`
+
+`observation_joinid` is transient — used only as the join key, never stored in the KG.
+
+**Storage:** File-based initially (`{iri_uuid}__{census_version}.bitmap`), co-located with the query server. Redis or node-property storage if latency requirements tighten.
+
+**Why co-schedule with graph build:** The H5AD is already downloaded and open. Extracting `observation_joinid` sets is a cheap obs-only operation. Doing it at build time avoids a second H5AD pass entirely.
+
+**Prototype:** `pilot_bitmap_build.py` — generalise to operate on live graph rather than `export.csv`.
+
+**Pre-requisites:** Ticket 1 (nodes have `author_label_column` and `census_dataset_id`).
+
+---
+
+### Ticket 3 — Bitmap cache refresh job (per Census release)
+
+**Goal:** When a new Census build is released (but the graph hasn't changed), rebuild bitmaps without re-downloading H5ADs — using `author_label_column` + cached H5ADs or re-downloading only obs.
 
 **What it does:**
-1. For each `Cell_cluster` node with `observation_joinids`: join → `soma_joinid` array → roaring bitmap
-2. Store bitmap keyed by `(node_iri, census_version)` — no separate UUID needed (confirmed by pilot)
-3. Update `census_version_cached` on the `Dataset` node
-4. Log join rate per node; flag drops >5% vs prior build
+1. For each `Cell_cluster` node: re-run the `observation_joinid` → `soma_joinid` join against the new Census build
+2. Overwrite bitmap files with new Census version key
+3. Update `census_version_cached` on `Dataset` nodes
+4. Log join rate per node; flag drops >5% vs prior build (signals `observation_joinid` instability)
 
-**Cadence:** Runs once per Census release (independent of graph build cadence).
+**Cadence:** Runs once per Census release, independent of graph build cadence.
 
-**Storage:** File-based initially (e.g. `{iri_hash}_{census_version}.bitmap`), co-located with the query server. Redis or node-property storage if latency requirements tighten.
+**Note:** This does need the H5ADs (for `observation_joinid` extraction). Options:
+- Keep H5AD cache from last graph build (simplest — just don't delete them)
+- Re-download via `download_source_h5ad()` (safe fallback but slow)
+- Store `observation_joinid` sets in a lightweight sidecar file at Ticket 2 build time, avoiding H5AD re-reads entirely
 
-**Prototype:** `pilot_bitmap_build.py` — generalise to operate on live graph query results rather than `export.csv`.
-
-**Pre-requisites:** Ticket A complete (nodes have `observation_joinids`). Must run on Sanger infra or via VPN (Census access is public; Bolt access is not).
+**Pre-requisites:** Ticket 2 complete (bitmap build proven). Must run on Sanger infra or via VPN (Census access is public; Bolt access is not).
 
 ---
 
-### Server architecture — new query endpoint
+### Server architecture — query endpoint
 
 The bitmap query workflow (graph → bitmaps → Census → results) needs a runtime home. Options:
 
 | Option | Notes |
 |---|---|
-| **New endpoint on same server** | Lightweight FastAPI service on a new port alongside Neo4j. Accepts a CL term or Cell_cluster IRI, looks up cached bitmaps, queries Census, returns obs/expression slice. Most natural fit. |
-| Extend `cxg_query_enhance` | If cxg_query_enhance already has a Census query interface, add a CL-KG-aware routing layer that resolves CL terms → bitmaps before querying. |
+| **New endpoint on same server** | Lightweight FastAPI service alongside Neo4j. Accepts a CL term or Cell_cluster IRI, looks up cached bitmaps, queries Census, returns obs/expression slice. |
+| Extend `cxg_query_enhance` | If it already has a Census query interface, add a CL-KG-aware routing layer that resolves CL terms → bitmaps before querying. |
 | Embedded in client | For PoC/dev: client-side script (no server needed). Not suitable for production. |
 
-**Recommended:** New FastAPI endpoint on the same host as `cl-kg-neo4j-db`, on a separate port. This supplements the existing CL-KG Neo4j interface without changing it. The endpoint handles: `CL term → Bolt query → bitmap lookup → Census coords query → response`.
-
-Extensions to `cxg_query_enhance` come after the server endpoint is stable — that library becomes the client-side interface to it.
-
----
-
-### pandasaurus_cxg integration note
-
-`pandasaurus_cxg` is the library that generates the CL-KG graph from H5AD files. Long-term, the obs_column/observation_joinid extraction (Ticket A) should live inside its `AnndataAnalyzer` → `GraphGenerator` pipeline, where the H5AD is already open and obs columns are already being processed by `(field_name, value)` pair.
-
-**Punt for now.** The post-build enrichment script approach (Ticket A short-term) avoids modifying pandasaurus_cxg and can be developed independently. Flag as a future integration task once both tickets are proved out end-to-end.
+**Recommended:** New FastAPI endpoint on the same host as `cl-kg-neo4j-db`. Supplements the existing CL-KG Neo4j interface without changing it. Extensions to `cxg_query_enhance` come after the endpoint is stable — that library becomes the client-side interface.
 
 ---
 
